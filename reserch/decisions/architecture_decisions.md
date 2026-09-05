@@ -10,11 +10,7 @@ Dokumen ini hanya berisi keputusan yang sudah cukup kuat untuk dijadikan constra
 
 ### Decision
 
-Jangan membuat real-money execution architecture sebelum market, fee, liquidity, gas, bridge, inventory, dan failed-leg economics memiliki evidence minimum.
-
-### Rationale
-
-Cross-chain arbitrage mudah terlihat profitable pada displayed spread tetapi menjadi negatif setelah executable depth, fee, gas, quote drift, failed-leg risk, dan rebalance cost dihitung.
+Jangan membuat real-money execution architecture sebelum market, fee, liquidity, gas, transfer, inventory, dan failed-leg economics memiliki evidence minimum.
 
 ---
 
@@ -24,17 +20,15 @@ Cross-chain arbitrage mudah terlihat profitable pada displayed spread tetapi men
 
 ### Decision
 
-Core research/architecture harus memperlakukan tempat execution sebagai `Venue`.
+Core memperlakukan tempat execution sebagai `Venue`.
 
 ```text
 Venue
 ├── DEX
-└── future CEX
+└── CEX
 ```
 
-### Rationale
-
-CEX harus dapat ditambahkan tanpa rewrite opportunity economics.
+Menambah CEX atau DEX baru tidak boleh mengubah opportunity economics.
 
 ---
 
@@ -42,21 +36,15 @@ CEX harus dapat ditambahkan tanpa rewrite opportunity economics.
 
 **Status:** ACCEPTED
 
-### Decision
-
-Bridge adalah salah satu transfer/rebalance edge.
-
 ```text
 Transfer
 ├── bridge
 ├── native transfer
-├── future CEX deposit
-└── future CEX withdrawal
+├── CEX deposit
+└── CEX withdrawal
 ```
 
-### Rationale
-
-Rebalancing harus memilih path termurah, bukan selalu bridge ALPH.
+Rebalancing memilih transfer/path berdasarkan economics, capacity, latency, health, dan risk.
 
 ---
 
@@ -64,20 +52,17 @@ Rebalancing harus memilih path termurah, bukan selalu bridge ALPH.
 
 **Status:** ACCEPTED
 
-### Decision
-
-Do not use ticker symbol as authoritative identity.
-
-Example:
+Ticker bukan authoritative identity.
 
 ```text
-EconomicAsset = ALPH
-SettlementAssets = native ALPH, Ethereum wALPH, BSC wALPH, future CEX balances
+EconomicAsset
+    abstract economic exposure
+
+SettlementAsset
+    exact representation at a chain/location
 ```
 
-### Rationale
-
-Location, contract, bridge provenance, decimals, and settlement behavior differ.
+ALPH/wALPH adalah first-profile example, bukan permanent core type.
 
 ---
 
@@ -85,19 +70,9 @@ Location, contract, bridge provenance, decimals, and settlement behavior differ.
 
 **Status:** ACCEPTED AS RESEARCH BASELINE
 
-### Decision
+Normal opportunity evaluation mengasumsikan buy dan sell inventory sudah tersedia pada location masing-masing. Transfer bukan mandatory step di antara kedua legs.
 
-Normal opportunity evaluation assumes buy and sell inventories already exist at their respective venues.
-
-Bridge/withdrawal is not a mandatory step between buy and sell.
-
-### Rationale
-
-Cross-chain transfer latency is incompatible with a deterministic arbitrage lock unless settlement is prefunded.
-
-### Caveat
-
-Economic superiority still must be validated with measured capital utilization and rebalance cost.
+Economic superiority tetap harus divalidasi dengan measured capital utilization dan rebalance cost.
 
 ---
 
@@ -105,13 +80,7 @@ Economic superiority still must be validated with measured capital utilization a
 
 **Status:** ACCEPTED
 
-### Decision
-
-Opportunity economics use amount-dependent executable quote/output for both legs.
-
-### Rationale
-
-Fee tier, concentrated liquidity, route, and price impact vary by size.
+Opportunity economics menggunakan amount-dependent executable quote/output.
 
 ---
 
@@ -119,15 +88,7 @@ Fee tier, concentrated liquidity, route, and price impact vary by size.
 
 **Status:** ACCEPTED
 
-### Decision
-
-Do not define one permanent trade size.
-
-Search for size that maximizes economic net profit under inventory/risk constraints.
-
-### Rationale
-
-Absolute profit often peaks before maximum possible trade size because price impact increases nonlinearly.
+Tidak ada permanent trade size. Size dicari untuk memaksimalkan economic net profit di bawah inventory, liquidity, venue, dan risk constraints.
 
 ---
 
@@ -135,29 +96,15 @@ Absolute profit often peaks before maximum possible trade size because price imp
 
 **Status:** ACCEPTED
 
-### Decision
-
-Natural reverse flow and netting happen before bridge/transfer decisions.
-
-### Rationale
-
-Gross directional flows can be much larger than final net settlement requirement.
+Natural reverse flow dan netting dipertimbangkan sebelum transfer/rebalance.
 
 ---
 
-## ADR-009 — Inventory is base + quote + gas + state
+## ADR-009 — Inventory is multi-asset + gas + state
 
 **Status:** ACCEPTED
 
-### Decision
-
-Do not model only ALPH inventory.
-
-Track base, quote, native gas, reserved, pending, in-transit, and settled balances independently.
-
-### Rationale
-
-Bridging ALPH alone can restore base balance while quote-side trade capacity remains depleted.
+Track base/economic asset, quote/hedge assets, native gas, reserved, locked, pending, in-transit, redeemable, dan settled balances secara independen.
 
 ---
 
@@ -165,36 +112,28 @@ Bridging ALPH alone can restore base balance while quote-side trade capacity rem
 
 **Status:** ACCEPTED
 
-### Decision
-
-Incoming bridge/transfer balance becomes usable only after destination settlement/reconciliation.
+Incoming transfer baru menjadi usable setelah destination settlement dan reconciliation berhasil.
 
 ---
 
-## ADR-011 — Bridge decision is economic + depletion-aware
+## ADR-011 — Rebalance decision is economic + depletion-aware
 
 **Status:** ACCEPTED AS MODEL DIRECTION
 
-### Decision
-
-Bridge trigger should consider:
+Trigger mempertimbangkan:
 
 ```text
 remaining trade capacity
 time-to-inventory-floor
-transfer p95 latency
+transfer latency distribution
 pending flow
 netting probability
-bridge health
+transfer health
 transfer cost
 lost opportunity cost
 ```
 
-not only a fixed percentage threshold.
-
-### Caveat
-
-Exact thresholds remain research outputs.
+bukan fixed percentage saja.
 
 ---
 
@@ -202,11 +141,7 @@ Exact thresholds remain research outputs.
 
 **Status:** ACCEPTED
 
-### Decision
-
-Do not use a universal 0.5–1% slippage tolerance.
-
-Tolerance is bounded by remaining profit after required final margin and risk reserve, then calibrated from measured adverse quote drift.
+Tidak ada universal fixed slippage tolerance. Tolerance dibatasi remaining profit budget dan dikalibrasi dari measured adverse quote drift.
 
 ---
 
@@ -214,9 +149,7 @@ Tolerance is bounded by remaining profit after required final margin and risk re
 
 **Status:** ACCEPTED
 
-### Decision
-
-Every non-atomic cross-venue candidate must have an unwind/hedge plan and bounded maximum loss before execution is considered production-ready.
+Setiap non-atomic cross-location candidate harus memiliki unwind/hedge plan dan bounded maximum loss sebelum production execution.
 
 ---
 
@@ -224,22 +157,7 @@ Every non-atomic cross-venue candidate must have an unwind/hedge plan and bounde
 
 **Status:** ACCEPTED
 
-### Decision
-
-Core bot logic must not assume a permanent capital amount such as `1,000 ALPH-equivalent`.
-
-Nominal values such as:
-
-```text
-100
-500
-1,000
-100,000 ALPH-equivalent
-```
-
-may be used only as research/simulation scenarios.
-
-At runtime, capital is derived from actual inventory state:
+Core tidak boleh mengasumsikan permanent capital amount.
 
 ```text
 actual balance
@@ -251,7 +169,7 @@ actual balance
 = available balance
 ```
 
-Then apply an optional operator-defined allocation ceiling:
+Optional operator allocation ceiling:
 
 ```text
 usable allocated capital
@@ -259,11 +177,7 @@ usable allocated capital
 min(available balance, allocation ceiling)
 ```
 
-when a ceiling is configured.
-
-A dedicated execution wallet may allow the bot to derive usable allocation from its balance after reserves. A shared wallet/account must support an explicit ceiling so unrelated funds are never treated as bot capital.
-
-Trade sizing must therefore be capital-agnostic:
+Trade sizing:
 
 ```text
 q_max = min(
@@ -277,33 +191,189 @@ q_max = min(
 q* = argmax ECONOMIC_NET(q), 0 < q <= q_max
 ```
 
+Any earlier `1,000 ALPH-equivalent` wording is scenario-only and superseded as a design constraint.
+
+---
+
+## ADR-015 — Core engine is chain-agnostic and asset-agnostic
+
+**Status:** ACCEPTED
+
+### Decision
+
+ALPH/Alephium adalah first research and implementation profile only.
+
+Core engine tidak boleh memiliki domain model seperti:
+
+```text
+AlphTrade
+AlephiumOpportunity
+UniswapArbitrage
+```
+
+sebagai foundation economics.
+
+Core model harus menggunakan generic identities/interfaces:
+
+```text
+ChainId
+EconomicAssetId
+SettlementAssetId
+VenueId
+MarketId
+InventoryLocationId
+TransferProviderId
+Quote
+ExecutionPlan
+RiskPolicy
+```
+
+### Required extension behavior
+
+Menambah chain baru harus mengikuti:
+
+```text
+register chain
+register assets
+add/reuse chain adapter
+add/reuse venue adapters
+register/discover markets
+add/reuse transfer adapters
+        ↓
+core detector/evaluator/sizer/rebalancer unchanged
+```
+
+Jika penambahan chain baru memerlukan perubahan pada formula core arbitrage economics, architecture dianggap gagal memenuhi ADR ini kecuali memang ada primitive ekonomi baru yang generalizable.
+
+---
+
+## ADR-016 — No chain/protocol data hardcoded in core business logic
+
+**Status:** ACCEPTED
+
+### Decision
+
+Core tidak boleh hardcode:
+
+```text
+chain/network ids
+RPC/websocket URLs
+explorer URLs
+native gas asset ids
+contract/token ids
+decimals
+router/factory addresses
+pool addresses / pool lists
+fee tiers
+bridge contracts
+market symbols
+transfer paths
+capital amounts
+size buckets
+slippage limits
+profit thresholds
+gas budgets
+inventory bands
+rebalance thresholds
+quote-age limits
+```
+
+Data tersebut berasal dari runtime config, validated registries, authoritative APIs, on-chain discovery, measured state, atau operator policy.
+
+### Important distinction
+
+`No hardcoded data` tidak berarti `no protocol-specific code`.
+
+Protocol semantics memang berbeda. Contoh:
+
+```text
+Uniswap V3 tick/liquidity math
+Alephium UTXO/contract execution
+CEX orderbook sequencing
+Wormhole-style VAA lifecycle
+```
+
+Logic seperti ini berada di adapters. Tetapi address, deployment metadata, active markets, fee state, dan policy numbers tidak boleh tersembunyi sebagai constants di core economics.
+
+---
+
+## ADR-017 — Dynamic discovery must be validated before execution
+
+**Status:** ACCEPTED
+
+### Decision
+
+Dynamic tidak berarti otomatis percaya semua hasil discovery.
+
+Lifecycle:
+
+```text
+DISCOVERED
+→ IDENTITY_VERIFIED
+→ PROTOCOL_VERIFIED
+→ CONFIG_VALIDATED
+→ QUOTE_VERIFIED
+→ SIMULATION_VERIFIED
+→ EXECUTION_ALLOWED
+```
+
+Unknown/spoof pools, arbitrary tokens, untrusted RPC/config, atau changed contracts tidak boleh menjadi execution-eligible hanya karena ditemukan secara dinamis.
+
 ### Rationale
 
-The same engine should work whether the operator provides very small, medium, or very large inventory. At small capital, fixed gas/fees may make the correct action `NO_TRADE`. At large capital, executable liquidity and risk may bind long before the full balance can be used.
+Full dynamism tanpa validation memperbesar attack surface. Reusability harus tetap fail-closed.
 
-### Supersedes
+---
 
-Any earlier research wording that describes `1,000 ALPH-equivalent per venue` as a capital constraint is superseded by this ADR. Such values are examples/scenario buckets only.
+## ADR-018 — Runtime registries are first-class architecture components
+
+**Status:** ACCEPTED
+
+### Decision
+
+Architecture harus mempunyai conceptual registries:
+
+```text
+ChainRegistry
+AssetRegistry
+VenueRegistry
+MarketRegistry
+TransferRegistry
+PolicyRegistry
+```
+
+Every record carries provenance/state such as:
+
+```text
+source
+verification_state
+version / updated_at
+health
+```
+
+Core engine membaca universe dari registries, bukan dari chain-specific `match`/`if` trees.
 
 ---
 
 # Explicitly NOT decided yet
 
-The following remain open and must not be presented as final architecture constants:
+Tetap belum final:
 
 ```text
-any fixed nominal capital per venue
-50/50 venue allocation
-75–100 ALPH normal trade size
-exact inventory warning/hard bands
+specific chain adapters implementation language/details
+specific registry file/database format
+config hot-reload mechanism
+plugin loading mechanism
+50/50 allocation
+normal trade size
+inventory warning/hard bands
 minimum net bps
-bridge batch size
-bridge cost budget
+transfer batch size
+transfer cost budget
 quote max age
 gas reserve amount
 p95/p99 slippage buffer
-specific preferred Alephium DEX
-specific preferred CEX
+preferred DEX/CEX
 ```
 
-These belong to measured research, not permanent decisions.
+Semua numeric operating parameters harus measured/policy-driven, bukan permanent business-logic constants.

@@ -13,11 +13,37 @@ Membangun dasar faktual untuk **ALPH multi-venue inventory arbitrage engine** ya
 - Alephium Bridge
 - Ekstensi CEX di kemudian hari tanpa rewrite core architecture
 
-Batas modal awal yang sedang diteliti:
+## Capital model
+
+**Tidak ada modal nominal yang di-hardcode ke desain bot.**
+
+Angka seperti `100`, `500`, `1,000`, atau `100,000 ALPH-equivalent` hanya boleh digunakan sebagai **research scenario / test bucket**, bukan sebagai asumsi runtime.
+
+Bot harus bekerja dengan modal yang benar-benar dialokasikan saat runtime:
 
 ```text
-MAX CAPITAL PER ACTIVE VENUE = 1,000 ALPH-equivalent
+operator/wallet provides capital
+        ↓
+read actual balances
+        ↓
+subtract locked/reserved/in-transit/gas safety reserve
+        ↓
+derive usable allocated capital
+        ↓
+dynamically size opportunities
 ```
+
+Contoh:
+
+```text
+allocated capital today = 100 ALPH-equivalent
+allocated capital later = 1,000
+allocated capital another deployment = 100,000
+```
+
+Core arbitrage logic harus tetap sama.
+
+`wallet_balance` tidak otomatis berarti seluruh balance boleh digunakan. Pada wallet/account bersama, operator harus dapat menentukan allocation ceiling. Pada dedicated execution wallet, usable capital dapat diturunkan dari actual balance setelah reserve dan safety constraints.
 
 ## Research discipline
 
@@ -91,7 +117,7 @@ PREFUNDED INVENTORY
         +
 EXECUTABLE QUOTING
         +
-SIZE OPTIMIZATION
+DYNAMIC SIZE OPTIMIZATION
         +
 INVENTORY-AWARE ARBITRAGE
         +
@@ -101,6 +127,26 @@ MIN-COST REBALANCING
 ```
 
 Bridge, CEX withdrawal, CEX deposit, dan native transfer adalah **settlement/rebalancing edges**, bukan otomatis bagian hot path.
+
+## Capital-agnostic sizing rule
+
+Trade size tidak berasal dari angka modal tetap.
+
+Secara konseptual:
+
+```text
+q_max = min(
+    buy-side usable capacity,
+    sell-side usable capacity,
+    executable-liquidity safe size,
+    per-trade risk limit,
+    venue/transfer constraints
+)
+
+q* = argmax ECONOMIC_NET(q),  0 < q <= q_max
+```
+
+Jika modal terlalu kecil untuk mengalahkan fee/gas/risk, keputusan yang benar adalah **NO TRADE**, bukan memaksa size minimum.
 
 ## Data rule
 
@@ -112,9 +158,9 @@ Pembuatan `src/` untuk execution engine ditunda sampai minimum berikut tersedia:
 
 1. market map terverifikasi;
 2. asset identity/provenance map;
-3. executable quote ladder per venue;
+3. executable quote model across dynamic size ranges;
 4. fee + gas model;
 5. bridge/transfer cost dan latency distribution;
-6. inventory model;
+6. capital-agnostic inventory model;
 7. failed-leg/unwind model;
-8. minimal economic viability test.
+8. minimal economic viability test across multiple capital scenarios.

@@ -16,7 +16,7 @@ Master index untuk seluruh research Bridgebot.
 | ID | File | Topic | Status | Primary output |
 |---|---|---|---|---|
 | V1 | `research_v1.md` | Baseline deep research | BASELINE | Initial system thesis |
-| 01 | `01_market_map.md` | ALPH market/pool map | OPEN | Verified route universe |
+| 01 | `01_market_map.md` | ALPH market/pool map | IN PROGRESS | Verified route universe + `data/pools/market_map_snapshot_2026-09-05.csv` |
 | 02 | `02_assets.md` | Asset identity/provenance | OPEN | Settlement asset registry |
 | 03 | `03_venues.md` | Venue capabilities | OPEN | Venue capability matrix |
 | 04 | `04_dex_fees.md` | LP/trading fees | OPEN | Fee registry + evidence |

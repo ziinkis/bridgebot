@@ -2,24 +2,73 @@
 
 ## Objective
 
-Menentukan berapa inventory yang harus berada di setiap venue agar bot dapat mengeksekusi opportunity tanpa menunggu transfer, sambil menjaga capital efficiency di bawah constraint:
+Menentukan bagaimana bot membaca, membatasi, dan menggunakan inventory aktual di setiap venue agar dapat mengeksekusi opportunity tanpa menunggu transfer, sambil menjaga capital efficiency dan risk.
+
+## Core rule: no fixed capital assumption
+
+Tidak ada constraint desain seperti:
 
 ```text
 MAX CAPITAL PER ACTIVE VENUE = 1,000 ALPH-equivalent
 ```
 
-## Initial assumption
+Angka `100`, `500`, `1,000`, `100,000 ALPH-equivalent`, atau nominal lain hanya boleh menjadi **research scenario**.
 
-Untuk eksperimen pertama saja:
+Runtime engine harus mengetahui modal melalui state aktual, bukan konstanta.
 
 ```text
-~500 ALPH/wALPH
-~500 quote-equivalent
+actual balances
+    ↓
+subtract locked / reserved / pending / in-transit
+    ↓
+subtract native-gas and emergency reserve
+    ↓
+apply operator allocation ceiling when configured
+    ↓
+usable allocated inventory
 ```
 
-Status: **ASSUMPTION**.
+## Wallet balance vs allocated capital
 
-Target final harus berasal dari measured directional demand dan trade-size distribution.
+Jangan menyamakan:
+
+```text
+wallet_balance
+```
+
+dengan:
+
+```text
+bot_spendable_balance
+```
+
+Dua operating modes harus didukung:
+
+### Dedicated execution wallet/account
+
+Jika wallet/account hanya digunakan bot:
+
+```text
+usable_capital
+≈
+available_balance
+- safety_reserves
+```
+
+### Shared wallet/account
+
+Jika balance juga digunakan untuk tujuan lain:
+
+```text
+usable_capital
+=
+min(
+    available_balance - safety_reserves,
+    operator_allocation_ceiling
+)
+```
+
+Bot tidak boleh menghabiskan dana di luar allocation ceiling.
 
 ## Inventory dimensions
 
@@ -30,13 +79,18 @@ InventoryState {
     settlement_asset
     location
 
+    onchain_or_account_balance
     available
+    allocated
     reserved
     locked
     pending_out
     pending_in
     in_transit
     redeemable
+
+    native_gas_reserve
+    emergency_reserve
 
     common_value
 }
@@ -53,15 +107,23 @@ base sell capacity
 quote buy capacity
 ```
 
-A venue with 1,000 ALPH-equivalent total but almost entirely base asset cannot keep buying; vice versa.
+Nominal total capital tidak cukup untuk menjelaskan execution capacity.
 
-## Trade capacity metric
+Contoh:
 
-Ratio is useful but incomplete.
+```text
+venue value = 10,000 ALPH-equivalent
+base = almost all capital
+quote = near zero
+```
 
-Define empirical capacity using expected trade size distribution.
+Venue tersebut tetap tidak mempunyai buy capacity yang memadai.
 
-Example:
+## Dynamic trade capacity
+
+Primary inventory metric harus berasal dari actual usable balance dan executable trade-size distribution.
+
+Example only:
 
 ```text
 available base = 450 ALPH
@@ -70,20 +132,66 @@ p95 intended sell size = 75 ALPH
 remaining sell capacity ≈ 6 p95 trades
 ```
 
-Similar calculation for quote-side buy capacity.
+Jika actual available base berubah menjadi `45 ALPH`, capacity berubah otomatis.
+Jika menjadi `45,000 ALPH`, liquidity/risk constraints mungkin menjadi limiter sebelum balance.
 
-## Initial safety zones
+## Dynamic sizing boundary
 
-Ratio bands may be tested as secondary guard:
+Untuk candidate trade:
 
 ```text
-35–65% base: healthy candidate band
-25–35 / 65–75: warning candidate band
-15–25 / 75–85: critical candidate band
-<15 / >85: stop direction that worsens imbalance
+q_max = min(
+    buy_side_usable_capacity,
+    sell_side_usable_capacity,
+    liquidity_safe_size,
+    per_trade_risk_limit,
+    venue_limit
+)
 ```
 
-All values are **ASSUMPTION**, pending simulation and measured flow.
+Optimizer kemudian mencari:
+
+```text
+q* = argmax ECONOMIC_NET(q)
+subject to 0 < q <= q_max
+```
+
+Implikasi:
+
+```text
+small capital
+→ gas/fee dapat membuat seluruh route NO_TRADE
+
+large capital
+→ liquidity/impact/risk dapat membatasi q jauh di bawah total balance
+```
+
+Tidak ada kewajiban menggunakan persentase tertentu dari modal.
+
+## Ratio bands are relative, not nominal
+
+Base/quote ratio masih berguna sebagai secondary guard, tetapi exact bands belum final.
+
+Possible research concepts:
+
+```text
+healthy region
+warning region
+critical region
+stop-worsening direction
+```
+
+Semua threshold harus diturunkan dari:
+
+```text
+directional flow
+trade size distribution
+transfer latency
+transfer cost
+route reliability
+```
+
+bukan dari nominal `1,000 ALPH`.
 
 ## Inventory reservation
 
@@ -101,13 +209,26 @@ This prevents overcommit when multiple opportunities overlap.
 
 Do not include incoming transfer in available balance until destination settlement is complete.
 
-## Dynamic targets
-
-Long-term target should depend on:
+Maintain explicit states:
 
 ```text
+available
+reserved
+pending_out
+in_transit
+redeemable
+settled
+```
+
+## Dynamic targets
+
+Target allocation must be derived from current and measured conditions:
+
+```text
+actual allocated capital
 frequency by trade direction
 trade size distribution
+executable liquidity
 transfer latency
 transfer cost
 venue reliability
@@ -115,6 +236,8 @@ expected opportunity rate
 ```
 
 If one direction dominates persistently, symmetric 50/50 can be inefficient.
+
+The bot may eventually have different optimal allocation ratios for different venues and capital regimes.
 
 ## Shadow price
 
@@ -132,25 +255,69 @@ inventory_shadow_cost
 
 A trade that restores scarce inventory may receive credit up to actual avoided rebalance liability.
 
+This shadow cost must depend on actual remaining capacity, not a fixed nominal threshold.
+
+## Capital-regime research
+
+Research must explicitly test multiple capital states rather than optimize around one nominal amount.
+
+Suggested scenario families are **examples, not product limits**:
+
+```text
+very small
+small
+medium
+large
+very large relative to pool depth
+```
+
+Use both:
+
+```text
+absolute amount buckets
++
+relative fractions of usable inventory/liquidity
+```
+
+The purpose is to find transition points where:
+
+```text
+gas dominates
+fee dominates
+price impact dominates
+inventory dominates
+liquidity becomes the binding constraint
+```
+
 ## Research tasks
 
-- [ ] build balance/location schema
+- [ ] build balance/location/allocation schema
+- [ ] define dedicated-wallet vs shared-wallet allocation semantics
 - [ ] measure trade-size distribution from quote opportunities
-- [ ] simulate 50/50 starting allocation
-- [ ] simulate alternative allocations
-- [ ] calculate base/quote capacity depletion
-- [ ] estimate required native gas reserve
+- [ ] simulate multiple capital regimes rather than one 1,000-ALPH case
+- [ ] simulate alternative base/quote allocations
+- [ ] calculate base/quote capacity depletion dynamically
+- [ ] estimate required native gas reserve as a function of expected actions
 - [ ] design reservation semantics
 - [ ] measure effect of pending transfer on available capacity
 - [ ] derive target allocation from directional opportunity data
+- [ ] derive `q_max` from balance + liquidity + risk constraints
+- [ ] identify minimum viable capital per route from actual fee/gas economics
+- [ ] identify capital level where additional funds stop increasing executable profit because liquidity becomes limiting
 
 ## Acceptance criteria
 
-For any candidate trade, the model can answer:
+For any candidate trade and any operator-provided capital state, the model can answer:
 
 ```text
-1. can both legs be funded now?
-2. what capacity remains after execution?
-3. does this worsen a near-term shortage?
-4. what future rebalance liability does it create?
+1. how much capital is actually spendable by the bot?
+2. can both legs be funded now?
+3. what is the maximum safe executable size now?
+4. what q maximizes economic net profit?
+5. what capacity remains after execution?
+6. does this worsen a near-term shortage?
+7. what future rebalance liability does it create?
+8. should the correct decision simply be NO_TRADE?
 ```
+
+The model must answer these without assuming a permanent nominal capital amount.

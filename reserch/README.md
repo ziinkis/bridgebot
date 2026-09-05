@@ -2,60 +2,47 @@
 
 Folder `reserch/` adalah workspace research-first untuk proyek **Bridgebot**. Belum ada keputusan implementasi yang boleh dianggap final sebelum didukung bukti yang cukup.
 
-## Tujuan
+## Project Direction
 
-Membangun dasar faktual untuk **ALPH multi-venue inventory arbitrage engine** yang pada tahap awal mencakup:
+Target akhir bukan bot yang hardcoded untuk ALPH/Alephium.
+
+Targetnya adalah:
+
+```text
+GENERIC MULTI-CHAIN / MULTI-VENUE
+INVENTORY ARBITRAGE ENGINE
+```
+
+Dengan:
+
+```text
+ALPH + Alephium/Ethereum/BSC
+```
+
+sebagai **first research / validation profile**.
+
+Core engine harus dapat dipakai untuk chain, asset, DEX, CEX, dan transfer network lain dengan menambah atau mengganti registry/config/adapter — bukan rewrite core economics.
+
+---
+
+## First Research Profile
+
+Saat ini evidence difokuskan pada:
 
 - Alephium native ALPH
-- Alephium DEX: Elexium, AYIN, Nightshade, dan venue lain yang terverifikasi
+- Elexium, AYIN, Nightshade dan venue Alephium lain yang terverifikasi
 - Ethereum / Uniswap
 - BNB Chain / PancakeSwap
 - Alephium Bridge
-- Ekstensi CEX di kemudian hari tanpa rewrite core architecture
+- future CEX extension
 
-## Capital model
+Ini adalah research scope pertama, **bukan hardcoded runtime universe**.
 
-**Tidak ada modal nominal yang di-hardcode ke desain bot.**
+---
 
-Angka seperti `100`, `500`, `1,000`, atau `100,000 ALPH-equivalent` hanya boleh digunakan sebagai **research scenario / test bucket**, bukan sebagai asumsi runtime.
+## Design Laws
 
-Bot harus bekerja dengan modal yang benar-benar dialokasikan saat runtime:
-
-```text
-operator/wallet provides capital
-        ↓
-read actual balances
-        ↓
-subtract locked/reserved/in-transit/gas safety reserve
-        ↓
-derive usable allocated capital
-        ↓
-dynamically size opportunities
-```
-
-Contoh:
-
-```text
-allocated capital today = 100 ALPH-equivalent
-allocated capital later = 1,000
-allocated capital another deployment = 100,000
-```
-
-Core arbitrage logic harus tetap sama.
-
-`wallet_balance` tidak otomatis berarti seluruh balance boleh digunakan. Pada wallet/account bersama, operator harus dapat menentukan allocation ceiling. Pada dedicated execution wallet, usable capital dapat diturunkan dari actual balance setelah reserve dan safety constraints.
-
-## Research discipline
-
-Setiap klaim harus diberi salah satu status berikut:
-
-- **VERIFIED FACT** — berasal dari contract, protocol docs, chain data, atau sumber primer yang dapat diverifikasi.
-- **MEASURED DATA** — hasil observasi/quote/gas/latency yang benar-benar diukur.
-- **ASSUMPTION** — parameter sementara untuk simulasi; tidak boleh dianggap fakta.
-- **UNKNOWN** — belum cukup bukti.
-- **DECISION** — keputusan desain yang sudah memiliki evidence dan dicatat di `decisions/architecture_decisions.md`.
-
-## Workflow
+### 1. Research first
 
 ```text
 RESEARCH
@@ -73,7 +60,140 @@ ARCHITECTURE
 IMPLEMENT
 ```
 
-Dilarang membalik workflow menjadi `assume → code → baru ukur` untuk komponen yang menyentuh real-money execution.
+### 2. No chain-specific hardcoding in core
+
+Core business logic tidak boleh hardcode:
+
+```text
+chain/network ids
+RPC/websocket URLs
+asset/token ids
+decimals
+contract addresses
+router/factory/pool addresses
+pool lists
+fee tiers
+bridge contracts
+market symbols
+capital amount
+trade size
+slippage/profit thresholds
+gas budgets
+inventory/rebalance bands
+```
+
+Data runtime berasal dari validated registry/config, discovery, authoritative venue state, measured runtime state, dan operator policy.
+
+### 3. Protocol behavior belongs in adapters
+
+`No hardcoded data` tidak berarti setiap protocol mempunyai implementation sama.
+
+Behavior yang memang adapter-specific misalnya:
+
+```text
+Uniswap V3 concentrated-liquidity math
+Alephium UTXO/contract semantics
+CEX orderbook sequencing
+bridge/VAA lifecycle
+```
+
+Core detector/evaluator/sizer/inventory/rebalancer tetap generic.
+
+### 4. Dynamic must fail closed
+
+```text
+DISCOVER
+→ VERIFY IDENTITY
+→ VERIFY PROTOCOL
+→ VALIDATE CONFIG
+→ VERIFY QUOTE
+→ SIMULATE/PREFLIGHT
+→ EXECUTION ALLOWED
+```
+
+Dynamic discovery tidak otomatis trusted.
+
+### 5. Capital is runtime state
+
+Tidak ada modal nominal permanent.
+
+```text
+actual balances
+- locked/reserved/pending/in-transit
+- gas/emergency reserve
+- optional operator ceiling
+= usable allocated capital
+```
+
+`wallet_balance` tidak otomatis berarti seluruh balance boleh digunakan.
+
+---
+
+## Generic Core Concepts
+
+Architecture research harus mengarah ke:
+
+```text
+Chain
+EconomicAsset
+SettlementAsset
+Venue
+Market
+ExecutableQuote
+InventoryLocation
+TransferProvider
+ExecutionAdapter
+RiskPolicy
+```
+
+Runtime registries:
+
+```text
+ChainRegistry
+AssetRegistry
+VenueRegistry
+MarketRegistry
+TransferRegistry
+PolicyRegistry
+```
+
+Core tidak boleh mempunyai permanent `if chain == ALEPHIUM` atau `if token == ALPH` dalam opportunity economics.
+
+---
+
+## Capital-Agnostic Sizing
+
+```text
+q_max = min(
+    buy-side usable capacity,
+    sell-side usable capacity,
+    executable-liquidity safe size,
+    per-trade risk limit,
+    venue constraints
+)
+
+q* = argmax ECONOMIC_NET(q), 0 < q <= q_max
+```
+
+Jika modal terlalu kecil untuk mengalahkan fee/gas/risk, keputusan benar adalah `NO_TRADE`.
+
+Jika modal sangat besar, liquidity/risk dapat membatasi size jauh sebelum seluruh modal dipakai.
+
+---
+
+## Research Discipline
+
+Setiap klaim:
+
+- **VERIFIED FACT** — source primer/chain/protocol evidence.
+- **MEASURED DATA** — hasil quote/gas/latency/state yang diukur.
+- **ASSUMPTION** — parameter sementara simulasi.
+- **UNKNOWN** — evidence belum cukup.
+- **DECISION** — constraint desain di `decisions/architecture_decisions.md`.
+
+Semua data yang berubah terhadap waktu harus mempunyai timestamp dan source/state reference.
+
+---
 
 ## Struktur
 
@@ -108,9 +228,9 @@ reserch/
     └── architecture_decisions.md
 ```
 
-## Core principle
+---
 
-Bot ini tidak diperlakukan sebagai "bridge-per-trade bot". Baseline hypothesis yang sedang diuji adalah:
+## Current Economic Thesis
 
 ```text
 PREFUNDED INVENTORY
@@ -126,41 +246,21 @@ NATURAL FLOW NETTING
 MIN-COST REBALANCING
 ```
 
-Bridge, CEX withdrawal, CEX deposit, dan native transfer adalah **settlement/rebalancing edges**, bukan otomatis bagian hot path.
+Bridge, native transfer, CEX withdrawal/deposit, dan transfer provider lain adalah settlement/rebalancing edges, bukan otomatis bagian hot path.
 
-## Capital-agnostic sizing rule
+---
 
-Trade size tidak berasal dari angka modal tetap.
+## Coding Gate
 
-Secara konseptual:
+Pembuatan `src/` execution engine ditunda sampai minimum tersedia:
 
-```text
-q_max = min(
-    buy-side usable capacity,
-    sell-side usable capacity,
-    executable-liquidity safe size,
-    per-trade risk limit,
-    venue/transfer constraints
-)
-
-q* = argmax ECONOMIC_NET(q),  0 < q <= q_max
-```
-
-Jika modal terlalu kecil untuk mengalahkan fee/gas/risk, keputusan yang benar adalah **NO TRADE**, bukan memaksa size minimum.
-
-## Data rule
-
-Semua angka yang berubah terhadap waktu — liquidity, executable output, gas, fee konfigurasi, latency, withdrawal status, bridge health — harus mempunyai timestamp dan source/state reference. Jangan mengubah snapshot menjadi konstanta permanen.
-
-## Coding gate
-
-Pembuatan `src/` untuk execution engine ditunda sampai minimum berikut tersedia:
-
-1. market map terverifikasi;
-2. asset identity/provenance map;
+1. first-profile market map terverifikasi;
+2. generic chain/asset/venue identity model;
 3. executable quote model across dynamic size ranges;
 4. fee + gas model;
-5. bridge/transfer cost dan latency distribution;
+5. transfer cost + latency distributions;
 6. capital-agnostic inventory model;
 7. failed-leg/unwind model;
-8. minimal economic viability test across multiple capital scenarios.
+8. chain-agnostic adapter/registry boundary;
+9. economic viability test;
+10. proof bahwa second chain/asset profile dapat direpresentasikan tanpa rewrite core economics.

@@ -220,11 +220,79 @@ Every non-atomic cross-venue candidate must have an unwind/hedge plan and bounde
 
 ---
 
+## ADR-014 — Capital is runtime state, not a design constant
+
+**Status:** ACCEPTED
+
+### Decision
+
+Core bot logic must not assume a permanent capital amount such as `1,000 ALPH-equivalent`.
+
+Nominal values such as:
+
+```text
+100
+500
+1,000
+100,000 ALPH-equivalent
+```
+
+may be used only as research/simulation scenarios.
+
+At runtime, capital is derived from actual inventory state:
+
+```text
+actual balance
+- locked
+- reserved
+- pending/in-transit exclusions
+- gas reserve
+- emergency reserve
+= available balance
+```
+
+Then apply an optional operator-defined allocation ceiling:
+
+```text
+usable allocated capital
+=
+min(available balance, allocation ceiling)
+```
+
+when a ceiling is configured.
+
+A dedicated execution wallet may allow the bot to derive usable allocation from its balance after reserves. A shared wallet/account must support an explicit ceiling so unrelated funds are never treated as bot capital.
+
+Trade sizing must therefore be capital-agnostic:
+
+```text
+q_max = min(
+    buy-side usable inventory,
+    sell-side usable inventory,
+    liquidity-safe size,
+    per-trade risk limit,
+    venue constraints
+)
+
+q* = argmax ECONOMIC_NET(q), 0 < q <= q_max
+```
+
+### Rationale
+
+The same engine should work whether the operator provides very small, medium, or very large inventory. At small capital, fixed gas/fees may make the correct action `NO_TRADE`. At large capital, executable liquidity and risk may bind long before the full balance can be used.
+
+### Supersedes
+
+Any earlier research wording that describes `1,000 ALPH-equivalent per venue` as a capital constraint is superseded by this ADR. Such values are examples/scenario buckets only.
+
+---
+
 # Explicitly NOT decided yet
 
 The following remain open and must not be presented as final architecture constants:
 
 ```text
+any fixed nominal capital per venue
 50/50 venue allocation
 75–100 ALPH normal trade size
 exact inventory warning/hard bands
